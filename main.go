@@ -20,9 +20,9 @@ func main() {
 	apiCfg := &apiConfig{}
 
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(stripped))
-	mux.HandleFunc("GET /healthz", handlerReadiness)
-	mux.HandleFunc("GET /metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("POST /reset", apiCfg.handlerReset)
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /api/reset", apiCfg.handlerReset)
 	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe())
 }
@@ -48,7 +48,7 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	hits := cfg.fileserverHits.Load()
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Hits: %d", hits)
+	fmt.Fprintf(w, "Hits: %d\n", hits)
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
