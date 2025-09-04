@@ -34,7 +34,13 @@ func main() {
 	const port = "8080"
 
 	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
 	platformString := os.Getenv("PLATFORM")
+	if platformString == "" {
+		log.Fatal("PLATFORM must be set")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -51,7 +57,7 @@ func main() {
 	mux.Handle("/app/", fsHandler)
 
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
-	mux.HandleFunc("POST /api/validate_chirp", handlerChirpsValidate)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerCreateChirp)
 
 	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
