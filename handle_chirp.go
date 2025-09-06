@@ -90,3 +90,30 @@ func getCleanedBody(body string, badWords map[string]struct{}) string {
 	}
 	return strings.Join(words, " ")
 }
+
+// handler function to get all chirps
+func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
+
+	//use the new generate function to get all the chirps from the database
+	chirps, err := cfg.queries.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirps", err)
+		return
+	}
+	// make an array of chirpsresponses to hold the chirps
+	resp := make([]chirpResponse, 0, len(chirps))
+
+	// Loop through all chirps from the database
+	for _, c := range chirps {
+		// append the chirpResponse into an array
+		resp = append(resp, chirpResponse{
+			ID:        c.ID,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+			Body:      c.Body,
+			UserId:    c.UserID,
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, resp)
+}
