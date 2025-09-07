@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -116,4 +117,43 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 	}
 
 	respondWithJSON(w, http.StatusOK, resp)
+}
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
+	// Extract chirpID from the URL
+	chirpId := r.PathValue("chirpID")
+
+	// convert to uuid
+	uid, err := uuid.Parse(chirpId)
+	if err != nil {
+		http.Error(w, "invalid chirpID", http.StatusBadRequest)
+		return
+	}
+
+	// find the chirp in the database
+	chirp, err := cfg.queries.GetChirp(r.Context(), uid)
+	// make sure there isnt an error
+	if err == sql.ErrNoRows {
+		respondWithError(w, http.StatusNotFound, "Chirp not found", err)
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirp", err)
+		return
+
+	}
+	// make a response so the chirp has something to be loaded into
+	resp := chirpResponse{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserId:    chirp.UserID,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

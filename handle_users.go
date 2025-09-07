@@ -4,11 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/SkinnyGilmore1029/Chirpy/internal/auth"
+	"github.com/SkinnyGilmore1029/Chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 // define a struct to use
 type createUserRequest struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// def a struct for the response without the password?
+// go
+type userResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
 }
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -24,13 +39,29 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Email is required", http.StatusBadRequest)
 		return
 	}
-	newUser, err := cfg.queries.CreateUser(r.Context(), req.Email)
+
+	// make sure password is set and not default
+	if req.Password == "unset" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+
+	// make the string into a hash
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		return
+	}
+	newUser, err := cfg.queries.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          req.Email,
+		HashedPassword: hash,
+	})
 	if err != nil {
 		http.Error(w, "Something went wrong", http.StatusBadRequest)
 		return
 	}
 	// create the new user
-	resp := User{
+	resp := userResponse{
 		ID:        newUser.ID,
 		CreatedAt: newUser.CreatedAt,
 		UpdatedAt: newUser.UpdatedAt,
