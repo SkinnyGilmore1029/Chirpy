@@ -11,8 +11,9 @@ import (
 )
 
 type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	ExpiresIn *int   `json:"expires_in_seconds,omitempty"`
 }
 
 type loginResponse struct {
@@ -20,6 +21,7 @@ type loginResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
@@ -52,10 +54,24 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Incorrect email or password", http.StatusUnauthorized)
 		return
 	}
+	const maxExpiry = time.Hour
+	expiry := maxExpiry
+	if logreq.ExpiresIn != nil {
+		requested := time.Duration(*logreq.ExpiresIn) * time.Second
+		if requested < maxExpiry {
+			expiry = requested
+		}
+	}
+	token, err := auth.MakeJWT(getUser.ID, cfg.JWTSecret, expiry)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to create JWT", err)
+		return
+	}
 	respondWithJSON(w, http.StatusOK, loginResponse{
 		ID:        getUser.ID,
 		CreatedAt: getUser.CreatedAt,
 		UpdatedAt: getUser.UpdatedAt,
 		Email:     getUser.Email,
+		Token:     token,
 	})
 }

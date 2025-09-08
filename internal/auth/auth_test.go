@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -45,5 +46,60 @@ func TestMakeAndValidateJWT(t *testing.T) {
 	_, err = ValidateJWT(token2, "wrong-secret")
 	if err == nil {
 		t.Error("expected error for token signed with wrong secret, got nil")
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	tests := []struct {
+		name      string
+		headers   http.Header
+		wantToken string
+		expectErr bool
+	}{
+		{
+			name: "valid bearer token",
+			headers: http.Header{
+				"Authorization": {"Bearer abc123"},
+			},
+			wantToken: "abc123",
+			expectErr: false,
+		},
+		{
+			name:      "missing header",
+			headers:   http.Header{},
+			wantToken: "",
+			expectErr: true,
+		},
+		{
+			name: "wrong format",
+			headers: http.Header{
+				"Authorization": {"Token abc123"},
+			},
+			wantToken: "",
+			expectErr: true,
+		},
+		{
+			name: "empty bearer token",
+			headers: http.Header{
+				"Authorization": {"Bearer "},
+			},
+			wantToken: "",
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotToken, err := GetBearerToken(tt.headers)
+			if tt.expectErr && err == nil {
+				t.Errorf("expected error, got nil")
+			}
+			if !tt.expectErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if gotToken != tt.wantToken {
+				t.Errorf("expected token %q, got %q", tt.wantToken, gotToken)
+			}
+		})
 	}
 }

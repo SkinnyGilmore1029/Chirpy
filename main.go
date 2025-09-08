@@ -18,6 +18,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	queries        *database.Queries
 	platform       string
+	JWTSecret      string
 }
 
 // Need a struct to help make users
@@ -41,6 +42,10 @@ func main() {
 	if platformString == "" {
 		log.Fatal("PLATFORM must be set")
 	}
+	JWTSecret := os.Getenv("JWT_SECRET")
+	if JWTSecret == "" {
+		log.Fatal("JWT_SECRET must be set")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -50,6 +55,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		queries:        dbQueries,
 		platform:       platformString,
+		JWTSecret:      JWTSecret,
 	}
 
 	mux := http.NewServeMux()

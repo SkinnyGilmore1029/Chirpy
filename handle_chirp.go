@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SkinnyGilmore1029/Chirpy/internal/auth"
 	"github.com/SkinnyGilmore1029/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -26,20 +27,33 @@ type chirpResponse struct {
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Decode request body into struct
+	// --- Authenticate user ---
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		http.Error(w, "missing or invalid authorization header", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenString, cfg.JWTSecret)
+	if err != nil {
+		http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	// --- Decode request body ---
 	var in newChirp
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	// Validate body length
+	// --- Validate chirp body length ---
 	if len(in.Body) > 140 {
 		http.Error(w, "chirp is too long", http.StatusBadRequest)
 		return
 	}
 
-	// Clean bad words
+	// --- Clean bad words ---
 	badWords := map[string]struct{}{
 		"kerfuffle": {},
 		"sharbert":  {},
@@ -47,25 +61,18 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	}
 	cleanedBody := getCleanedBody(in.Body, badWords)
 
-	// Parse user_id into UUID
-	uid, err := uuid.Parse(in.UserId)
-	if err != nil {
-		http.Error(w, "invalid user_id", http.StatusBadRequest)
-		return
-	}
-
-	// Create chirp in database
+	// --- Create chirp in database ---
 	chirp, err := cfg.queries.CreateChirp(r.Context(), database.CreateChirpParams{
 		ID:     uuid.New(),
 		Body:   cleanedBody,
-		UserID: uid,
+		UserID: userID, // ✅ use user ID from JWT, not request body
 	})
 	if err != nil {
 		http.Error(w, "could not create chirp", http.StatusInternalServerError)
 		return
 	}
 
-	// Map to response struct with snake_case
+	// --- Map DB model to response ---
 	resp := chirpResponse{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
@@ -74,7 +81,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		UserId:    chirp.UserID,
 	}
 
-	// Send response
+	// --- Send response ---
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
