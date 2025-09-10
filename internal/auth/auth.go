@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"fmt"
 
+	"crypto/rand"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -76,5 +78,15 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", errors.New("empty bearer token")
 	}
 
+	return token, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	refreshtoken := make([]byte, 32)
+	_, err := rand.Read(refreshtoken)
+	if err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(refreshtoken)
 	return token, nil
 }

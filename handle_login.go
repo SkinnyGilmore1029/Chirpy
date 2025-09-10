@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SkinnyGilmore1029/Chirpy/internal/auth"
+	"github.com/SkinnyGilmore1029/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -17,11 +18,12 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
 }
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
@@ -62,16 +64,39 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 			expiry = requested
 		}
 	}
+
+	// make the refresh token to use somehow?
+	refreshtoken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Something went wrong", err)
+		return
+	}
+
+	now := time.Now()
+	expiresAt := now.Add(60 * 24 * time.Hour)
+	_, err = cfg.queries.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refreshtoken,
+		CreatedAt: now,
+		UpdatedAt: now,
+		UserID:    getUser.ID,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Something went wrong", err)
+		return
+	}
+
 	token, err := auth.MakeJWT(getUser.ID, cfg.JWTSecret, expiry)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to create JWT", err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, loginResponse{
-		ID:        getUser.ID,
-		CreatedAt: getUser.CreatedAt,
-		UpdatedAt: getUser.UpdatedAt,
-		Email:     getUser.Email,
-		Token:     token,
+		ID:           getUser.ID,
+		CreatedAt:    getUser.CreatedAt,
+		UpdatedAt:    getUser.UpdatedAt,
+		Email:        getUser.Email,
+		Token:        token,
+		RefreshToken: refreshtoken, // maybe
 	})
 }
