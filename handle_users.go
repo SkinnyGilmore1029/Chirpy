@@ -17,6 +17,11 @@ type createUserRequest struct {
 	Password string `json:"password"`
 }
 
+type updateUserRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 // def a struct for the response without the password?
 // go
 type userResponse struct {
@@ -73,4 +78,60 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	gettoken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token", err)
+		return
+	}
+	userId, err := auth.ValidateJWT(gettoken, cfg.JWTSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token", err)
+		return
+	}
+	// userId is now available for use
+	var req updateUserRequest
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Failed to retrieve request", err)
+		return
+	}
+
+	if req.Email == "" || req.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Email and Password are required", nil)
+		return
+	}
+
+	hashpw, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong", err)
+		return
+	}
+
+	// update user with new hashpw
+	updateuser, err := cfg.queries.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:             userId,
+		Email:          req.Email,
+		HashedPassword: hashpw,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Cant Authorize", err)
+		return
+	}
+	// respond with the updated user information
+	resp := userResponse{
+		ID:        updateuser.ID,
+		CreatedAt: updateuser.CreatedAt,
+		UpdatedAt: updateuser.UpdatedAt,
+		Email:     updateuser.Email,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to encode response", err)
+		return
+	}
+
 }
