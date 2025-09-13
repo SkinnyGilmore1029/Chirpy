@@ -19,6 +19,7 @@ type apiConfig struct {
 	queries        *database.Queries
 	platform       string
 	JWTSecret      string
+	POLKAKey       string
 }
 
 // Need a struct to help make users
@@ -46,6 +47,11 @@ func main() {
 	if JWTSecret == "" {
 		log.Fatal("JWT_SECRET must be set")
 	}
+	POLKAKey := os.Getenv("POLKA_KEY")
+	if POLKAKey == "" {
+		log.Fatal("POLKA_KEY must be set")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -56,6 +62,7 @@ func main() {
 		queries:        dbQueries,
 		platform:       platformString,
 		JWTSecret:      JWTSecret,
+		POLKAKey:       POLKAKey,
 	}
 
 	mux := http.NewServeMux()
