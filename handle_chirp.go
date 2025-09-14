@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -101,19 +102,53 @@ func getCleanedBody(body string, badWords map[string]struct{}) string {
 
 // handler function to get all chirps
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
+	// declare what chirps is first and error value to be changed later
+	var chirps []database.Chirp
+	var err error
 
-	//use the new generate function to get all the chirps from the database
-	chirps, err := cfg.queries.GetAllChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirps", err)
-		return
+	// check for author id in URL
+	authId := r.URL.Query().Get("author_id")
+	if authId == "" {
+		// If no author ID is provided, return all chirps
+		chirps, err = cfg.queries.GetAllChirps(r.Context())
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirps", err)
+			return
+		}
+	} else {
+		// If author ID is provided, return chirps for that author
+		uid, err := uuid.Parse(authId)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "invalid authorId", err)
+			return
+		}
+
+		chirps, err = cfg.queries.GetChirpsByAuthor(r.Context(), uid)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to retrieve chirps", err)
+			return
+		}
 	}
-	// make an array of chirpsresponses to hold the chirps
+
+	// check for sort query parameter
+	sortParam := r.URL.Query().Get("sort")
+	if sortParam == "desc" {
+		// sort descending by CreatedAt
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
+	} else {
+		// default is ascending
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+		})
+	}
+
+	// make an array of chirpResponses to hold the chirps
 	resp := make([]chirpResponse, 0, len(chirps))
 
-	// Loop through all chirps from the database
+	// loop through all chirps from the database
 	for _, c := range chirps {
-		// append the chirpResponse into an array
 		resp = append(resp, chirpResponse{
 			ID:        c.ID,
 			CreatedAt: c.CreatedAt,
@@ -123,6 +158,7 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 		})
 	}
 
+	// respond with the newly created JSON structs
 	respondWithJSON(w, http.StatusOK, resp)
 }
 
@@ -133,7 +169,7 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 	// convert to uuid
 	uid, err := uuid.Parse(chirpId)
 	if err != nil {
-		http.Error(w, "invalid chirpID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "invalid chirpId", err)
 		return
 	}
 
